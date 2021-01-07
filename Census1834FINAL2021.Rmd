@@ -1,0 +1,304 @@
+---
+title: "Census1834final"
+author: "Barbara Sørensen"
+date: 8/01-2021
+---
+
+# Loading packages
+This project will use tidyverse, https://tidyverse.tidyverse.org, including ggplot2 which is a system that creates "graphics, based on The Grammar of Graphics" (https://ggplot2.tidyverse.org/)  
+```{r}
+library(tidyverse)
+library(ggplot2)
+```
+
+# Loading data
+The dataset, which I will use in the following, is provided by Aarhus Stadsarkiv's (city archive) GitHub channel: 
+ 
+```{r}
+Census1834 <- read_csv("https://raw.githubusercontent.com/aarhusstadsarkiv/datasets/master/censuses/1834/census-1834-normalized.csv")
+```
+# The dataset
+The dataset is structured with 62607 observations of 16 variables with columns 
+covering categories such as: 
+
+"Sogn", the parish
+
+"id", the id that each person got 
+
+"amt", the county, Aarhus 
+
+"lokalitet", the location, cities and villages 
+
+"Bygning", the building that the person lived in 
+
+"f/e navn", first name and last name 
+
+"alder", the age
+
+"Koen" [køn], the gender
+
+"Civilstand" the marital status 
+
+"erhverv", the profession or the function she or he had
+
+This project will be based on and specify the columns "Sogn", "Lokalitet", "Bygning", "f/e navn", "alder", "Koen", "civilstand" and "erhverv". 
+
+
+# Cleaning the data of "bygning"
+Before making the count-function with the buildings, I have to clean the data with text mining because of inconsistent orthography and names. For example, "gård" etc., appeared in different ways and formations. Using mutate with the str_replace_all function makes it possible to get related words into the proper category by transforming the word if needed: 
+```{r}
+Census1834 %>% 
+  mutate(bygning = str_replace_all(bygning, "en Gård\\_|en Gård\\_en|Gård\\_en|Gaard|En Gaard|udfløttet Gård\\_|Gård\\_ udflyttet|Gård\\_ udfløt|En udfløt Gård\\_|Gaard|1 Gaard|gård|en Gård\\_ udflyttet|\\[gård\\]", "Gård_")) %>%
+  mutate(bygning = str_replace_all(bygning, "Bolsted a\\)|Bolsted b\\)|et Boelssted|et Boelsted|Et Boelssted|et Boel|Boelsted|et Bolsted|et boelssted|Et Bolssted|et Boested|Bolssted|et boelsted|Hus\\, Bolsted|et Sted|Boels Sted|1 Boel|Bolsted a\\)\\|Bolsted b\\)| Boelssted a\\)", "Bolsted")) %>%
+  mutate(bygning = str_replace_all(bygning, "et Huus|et Hus|Hus udflyttet|Hus udfløt\\.|et Hus|Hus i Leie|Et Huus|Huus|hus|1 Huus|et Huus b\\)|et Huus i Leie|Skolen\\, et Huus|et Huus c\\)|Præstegaards Huse|Hus c\\)|et Teglhuus|en Huus|Hus a\\)|Hus b\\)|et Huus a\\)|Hus c\\)", "Hus")) %>%
+  mutate(bygning = str_replace_all(bygning, "Præstegaarden|Præstegaard|PræsteGård\\_", "Præstegaard")) %>%
+  mutate(bygning = str_replace_all(bygning, "FattigHuset|Sognets Fattighus|Sognets Fattighus|et Fattighuus|Fattighuus|et FattigHus|FattigHus|et fattigt Hus|Fattigstiftelsen", "Fattighus")) %>%
+  mutate(bygning = str_replace_all(bygning, "en Mølle|en mølle|Mølle|En Mølle|Røde Mølle|Hede Mølle|Fuldbromølle|mølle|Pøt Mølle|Weirmølle|en Klude Mølle|en Stampe Mølle|en Stampmølle|en StampeMølle|ToustrupMølle|Vester Mølle|\\[mølle\\]", "Mølle")) %>%
+  mutate(bygning = str_replace_all(bygning, "Skolen|en Skole|Friskolen|SkoleHuset|Skole|Skoleboligen|Skoelen|1 Skole|et Skolehuus|Skolehuus|Skolebygningen| Skoleboligen|Skolehuus|Holmstolskole|Skolebolien|Byens Skole|Distriktsskolen", "Skole")) %>%
+  mutate(bygning = str_replace_all(bygning, "Hovedgaard|HovedGård\\_|Howedgaard|en Hovedgaard|Hovgaarden", "Hovedgård")) %>%
+  mutate(bygning = str_replace_all(bygning, "en Parcel|3 Parcel|4de Parcel|5te Parcel|1ste Parcel|6te Parcel|2 Parcel", "Parcel")) %>%
+  mutate(bygning = str_replace_all(bygning, "en tømmerGård\\_|TømmerGård\\_|Havnens Tømmergaard|Mallings Tømmergaard|tømmerGård\\_\\, ubeboet", "Tømmergård")) %>%
+  mutate(bygning = str_replace_all(bygning, "et huus med hartkorn|Hus med hartkorn|et huus med hrtkrn", "Hus med hartkorn")) %>%
+  mutate(bygning = str_replace_all(bygning, "et huus uden hartkor|Hus uden hartkorn|et huus uden hrtkrn", "Hus uden hartkorn")) %>%
+  mutate(bygning = str_replace_all(bygning, "en Kroe|Kron|et Kroe|Kroe|Krohuus|Kroen|et Kroehuus|Norsminde Kro|Wadsken Kroe|et Kroersted|Et Kroested", "Kro")) %>%
+  mutate(bygning = str_replace_all(bygning, "en Halvgaard|en halv Gård\\_", "En halv gård")) %>%
+  mutate(bygning = str_replace_all(bygning, "en Skovfoged Boelig|Skovfogedsted|Skovfogedboelig|et Skovfogdhuus|Skovfoged Boelig|et Skovfogedhuus|1 Skovfogedhuus", "Skovfogedbolig")) %>%
+  mutate(bygning = str_replace_all(bygning, "Hospitals Byg\\.|et Hospital|Hospitalet|Aarhuus Hospital", "Hospital")) %>% 
+  mutate(bygning = str_replace_all(bygning, "Smedehuus|SmedeHus|Et Smedehuus|Et Smedhuus|et Smedehuus|Smedehuset", "Smedehus")) %>%
+  mutate(bygning = str_replace_all(bygning, "et Teglværk|Teglværk", "Teglværk")) %>%
+  mutate(bygning = str_replace_all(bygning, "Pakhus|ToldbodpakHuset", "Pakhus")) %>%
+  mutate(bygning = str_replace_all(bygning, "Degnebolien|Degneboligen", "Degnebolig")) %>%
+  mutate(bygning = str_replace_all(bygning, "hovedGård\\_", "Hovedgård")) ->Census1834
+  
+```
+
+# Analysis 
+In the following analysis I want to discharge tendencies and thereby questions as "in which type of building did people most often live?", "what kind of profession was most frequent?", "in which parish did most people live?", "which names were particularly popular?", "what was the average age?", "did most men or women live there?"and "what marital status did most have"?, but as it will appear, I will escpecially specify categories as building and profession. In other words, I want to demonstrate how a census can be processed and analyzed. 
+```{r}
+Census1834 %>%
+  count(bygning, sort = TRUE)
+
+```
+With the cleaning of the data, "bygning", I can thus se, that "gård" (yard) appears as the most frequent form for settlement, but I also want to try to visualize it: 
+
+# Visualisering building
+To make visualizations, I especially need to use ggplot2. To find the appropriate code, I god inspiration from Max Odsbjergs page: http://hax.odsbjerg.dk/dkpol_daily_comparing_tf_idf.html 
+
+```{r}
+Census1834 %>%
+  count(bygning, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(bygning = reorder(bygning, n)) %>%
+  ggplot(aes(x = bygning, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "bygning",
+      title = "Count of buildings found in Census 1834") 
+```
+The visualization thus shows and confirms that "gård" was the most common settlement of the county in the period, but as I will show in the following, it does not mean that there were most farmers/caretakers/owners.
+I assume that the category "NA" stands for "not available". 
+
+# Cleaning the data of "profession"
+Before analyzing and visualize the columns "profession" I also have to clean the data here. I will get use of mutate with the str_replace_all function as I did earlier: 
+
+```{r}
+Census1834 %>%
+  mutate(erhverv = str_replace_all(erhverv, "deres søn|Enkens hjelpende Søn|enkens søn|Enkens Søn|stedsøn|hans Stedsøn|gårdfolkenes søn|Søn\\, Skolepligtig|Hendes Søn|hendes søn|de forriges Søn|hans Dreng|deres Søn|hans søn|hendes Søn|dattersøn|Søn|hans Søn|Deres Søn|søn|Hans Søn|deres hjelpende Søn|\\[søn\\]", "Søn")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "deres datter|Familiefaderens Datter|\\[datter\\]|datter|hendes datter|gårdfolkenes datter|deres Datter|hans datter|hendes Datter|hans stedDatter|de forriges Datter|den sidstes Datter|den Sidstes Datter|Datter|hans Datter|deres steddatter|hans Steddatter|Deres Datter|enkens datter|sidstnævntes datter|disses datter|Hans Datter|Datter\\, Skolepligtig", "Datter")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "hans Kone|en Daglejers Kone|hans kone|Hans Kone|Kone|\\[hans kone\\]", "Kone")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "hendes Barn|Deres Barn|deres Barn", "Barn")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "D\\.Tjenestekarl|dennes Tjenestekarl|tjenestekarl|Tjenestekarl|tjenestedreng|deres Tjenestekarl|Tienestekarl|Tjenestedreng|deres tjenestekarl", "Tjenestekarl")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "D\\.Tjenestepige|hans Huusholderske|Disses Tjenestepige|tienestepige|deres Tjenestepige|Tjenestepige|tjenestepige|Tienestepige|deres tjenestepige", "Tjenestepige")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Gaardmand|Fæstegaardmand", "Gårdmand")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Dagleier|Daglejer|Daglejerske", "Daglejer")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Huusmand\\, lever af sin Jordlod|Huusmand\\,Lever af sin Jordlod", "Husmand der lever af sin jordlod")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Huusmand og Dagleier|Huusmand\\, Dagleier|Huusmand\\, Daglejer", "Husmand og daglejer")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Aftægtsmand|aftægtsmand", "Aftægtsmand")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Almisselem|Fattighjælp\\, døvstum|hospitaltslem|fattiglem|Fattiglem|hospitalslem|almisselem|forsørges af Fattigvæsenet|Datter\\, underholdes af Fattigvæsenet|Forsørges af Fattigvæsenet|Kone\\, Fattighjælp", "Fattighjælp")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Daglejer\\, Indsidder|Inderste og Daglejer|Indsidder og Daglejer|Indsidder og Dagleier|Indsidder\\, Daglejer", "Indsidder og daglejer")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Pleiebarn|deres PleiDatter|deres plejedatter|enkens og Sønnens Plejebarn|Plejedatter|Plejebarn i Søns Sted|en Plejebarn|deres PleiDatter|deres Pleje Søn|Deres Plejebarn|deres Plejebarn|Pleiedatter|plejebarn|deres Pleiedatter|plejeDatter| Plejebarn\\, i Søns Sted|Plejesøn hans Plejebarn|Pleiesøn|deres Pleiesøn|plejesøn|hendes Plejebarn", "Plejebarn")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Træskoemand|Træskomand|Træskoekarl|Træeskoekarl", "Træskomand")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Dragon ved Prins Ferdinands Regiment|Dragon|Dragon af Prins Ferdinands Regiment", "Dragon")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Inderste|Indsidder|Indsidderske", "Indsidder")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Kjøbmand|Kiøbmand", "Købmand")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Smed|Smedesvend|Smedesvend", "Smed")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Huusjomfrue|Huusjomfru|Hujomfru", "Husjomfru")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Handelsbetjent|Betjent ved Møllen|betjent ved Møllen|Toldbetjent", "Betjent")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Væver|Væverske|Væverpige|Datter\\, lever som Væverske|Søn\\, Væver|Kone\\, Væverske", "Væver")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Snedker|Snedkerlærling|Snedkersvend", "Snedker")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Huusmoder", "Husmoder")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "aftægtskone|Aftægtskone|Indsidder og Aftægtskone", "Aftægtskone")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Lever af sin Jordlod|Lever af en Jordlod|lever af hans jordlod", "Lever af egen Jordlod")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "Gaardens Eier|Gaardeier", "Gårdejer")) %>%
+  mutate(erhverv = str_replace_all(erhverv, "lever af Haandarbeide|Haandarbeide|ernærer sig af Haandarbeide|ernærer sig af sine Hænders Gjerning|Ernærer sig med Haandarbeide", "Håndarbejde")) ->Census1834   
+  
+```
+
+# Profession 
+Finding out which profession most people had in the period. 
+```{r}
+Census1834 %>%
+  count(erhverv, sort = TRUE)
+```
+# Visualization of professions
+```{r}
+Census1834 %>%
+  count(erhverv, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(erhverv = reorder(erhverv, n)) %>%
+  ggplot(aes(x = erhverv, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "erhverv",
+      title = "Count of professions found in Census 1834")
+```
+Perhabs surprisingly, there were most children in the period that was listed as "søn" (son) and "datter" (daughter). Another common type of "profession", or common function, was to be a wife, "Kone". 
+ In addition, "tjenestepige" (made) and "tjenestedreng" (farm boy) also appear frequently. They probably lived and served at the farm. The owners or famers, "gårdmand" are also common, but compared to those mentioned, there are only just over 2.500 cases. 
+ 
+# Parish
+Now I want visualize which parish had the most people living in: 
+
+```{r}
+Census1834 %>%
+  count(sogn, sort = TRUE)
+```
+# Visualization of parish 
+
+```{r}
+Census1834 %>%
+  count(sogn, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(sogn = reorder(sogn, n)) %>%
+  ggplot(aes(x = sogn, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "sogn",
+      title = "Count of parishes found in Census 1834") 
+```
+In the visualization above, it can be seen that most people lived in "Århus Købstad" (Aarhus market town), which makes sense since it was, and is, the most largest city. 
+
+# Location
+In the following, there vil be illustrated, which location (street) most people lived in: 
+```{r}
+Census1834 %>%
+  count(lokalitet, sort = TRUE)
+```
+"Middelgade" appears as the most lived-in street. 
+
+# Average age 
+
+Below I want to visualize the average age by using the count function and just apply "alder" (age) as the column is named:  
+```{r}
+Census1834 %>%
+  count(alder, sort = TRUE)
+```
+# Visualization of age 
+```{r}
+Census1834 %>%
+  count(alder, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(alder = reorder(alder, n)) %>%
+  ggplot(aes(x = alder, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "alder",
+      title = "Count of age found in Census 1834")
+```
+As depicted there was a clear majority of children, perhabs a "baby boom", but with the period, 1834, in mind there was a higher infant mortality rate. The average age confirms the demonstration with the before shown profession or function that illustrated a high amount of children. 
+
+# Marital status
+Herinafter i want to discharge which marital status there was most common in the time: 
+```{r}
+Census1834 %>%
+  count(civilstand, sort = TRUE)
+```
+# Visualization of marital status
+```{r}
+Census1834 %>%
+  count(civilstand, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(civilstand = reorder(civilstand, n)) %>%
+  ggplot(aes(x = civilstand, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "civilstand",
+      title = "Count of marital statusses found in Census 1834")
+```
+With the many children and the low average age rate in mind it fits with the result above which 
+shows that mostly people were unmarried "ugift".
+What the visualization also shows, is that seperations and divorvces were more or less an unknown condition, which is a contrast to today. 
+
+# Gender
+```{r}
+Census1834 %>%
+  count(koen, sort = TRUE)
+```
+
+# Visualization of gender 
+```{r}
+Census1834 %>%
+  count(koen, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(koen = reorder(koen, n)) %>%
+  ggplot(aes(x = koen, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "koen",
+      title = "Count of gender found in Census 1834")
+```
+
+# First name 
+
+```{r}
+Census1834 %>%
+  count(fnavn, sort = TRUE)
+```
+# Visualization of first names 
+```{r}
+Census1834 %>%
+  count(fnavn, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(fnavn = reorder(fnavn, n)) %>%
+  ggplot(aes(x = fnavn, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "fnavn",
+      title = "Count of first names found in Census 1834")
+```
+
+# Last name 
+```{r}
+Census1834 %>%
+  count(enavn, sort = TRUE)
+```
+# Visualization of last names 
+```{r}
+Census1834 %>%
+  count(enavn, sort = TRUE)%>%
+  top_n(15) %>%
+  mutate(enavn = reorder(enavn, n)) %>%
+  ggplot(aes(x = enavn, y = n)) +
+  geom_col() +
+  xlab(NULL) +
+  coord_flip() +
+      labs(x = "Count",
+      y = "enavn",
+      title = "Count of last names found in Census 1834")
+```
+
+
+
